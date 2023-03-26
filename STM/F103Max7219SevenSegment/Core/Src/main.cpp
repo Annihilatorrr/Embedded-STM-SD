@@ -128,9 +128,9 @@ int main(void)
 {
     clockInit();
     SysTick_Init(72000000);
+    initSwdOnlyDebugging();
     testSpi1();
     testSpi2();
-    initSwdOnlyDebugging();
 
     while (1)
     {
