@@ -1,5 +1,5 @@
 STM/.metadata/
-STM/F103Max7219SevenSegment/.settings/
 STM/F103Max7219SevenSegment/Debug/
-STM/F103Max7219SevenSegment/Release/Libs/Common/Src/subdir.mk
 STM/F103Max7219SevenSegment/Release/
+STM/F103Max7219LedMatrix/Debug/
+STM/F103Max7219LedMatrix/Release/
