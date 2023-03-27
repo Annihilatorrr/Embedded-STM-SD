@@ -1,7 +1,7 @@
 // STM32F103 SysTick_Config(72000) + IWDG
 
 #include "stm32f1xx.h"
-#include "delay.h"
+#include <delay.h>
 
 volatile uint32_t sysTick = 0;
 volatile uint32_t msTicks = 0;

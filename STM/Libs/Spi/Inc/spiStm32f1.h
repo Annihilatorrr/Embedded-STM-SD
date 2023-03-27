@@ -95,7 +95,7 @@ private:
 						                        | (m_fullDuplex ? (0 << SPI_CR1_BIDIMODE_Pos):(1 << SPI_CR1_BIDIMODE_Pos))
 						                        | SPI_CR1_SSM               //Software SS
 						                        | SPI_CR1_SSI               // NSS (CS) pin is high
-						                        | SPI_CR1_BR_0 | SPI_CR1_BR_1  //Baud
+						                        | SPI_CR1_BR  //Baud
 						                        | SPI_CR1_MSTR // Master mode
 						                        | 0 << SPI_CR1_CPOL_Pos // Clock polarity
 						                        | 0 << SPI_CR1_CPHA_Pos;  // Clock phase
@@ -133,10 +133,16 @@ private:
     }
 public:
 
-    Spi(Spi<Controller::f103>::SpiNumber spiNumber, Spi<Controller::f103>::SpiFrameSize frameSize, bool msbFirst, bool fullDuplex):
+    Spi(Spi<Controller::f103>::SpiFrameSize frameSize, bool msbFirst, bool fullDuplex):
         m_frameSize(frameSize)
     , m_msbFirst(msbFirst)
     , m_fullDuplex(fullDuplex)
+    {
+
+    }
+
+
+    void init(Spi<Controller::f103>::SpiNumber spiNumber)
     {
         switch(spiNumber)
         {
@@ -148,7 +154,6 @@ public:
                 break;
         }
     }
-
 
     void sendData(uint8_t address, uint8_t data) const
     {

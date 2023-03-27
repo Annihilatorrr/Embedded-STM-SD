@@ -3,6 +3,8 @@
 #define DELAY_H
 
 extern volatile uint32_t sysTick;
+extern volatile uint32_t msTicks;
+
 void delayMs(uint32_t ms);
 void SysTick_Init(int cpuFrequency);
 
