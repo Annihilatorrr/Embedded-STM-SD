@@ -110,7 +110,7 @@ int main(void)
     clockInit();
     SysTick_Init(72000000);
     initSwdOnlyDebugging();
-    //testSpi1();
+
     SpiF103 spi(SpiF103::Spi2, SpiF103::SpiFrameSize::Bit8, true, true);
     test(spi);
 
