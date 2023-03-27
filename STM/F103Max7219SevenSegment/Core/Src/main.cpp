@@ -65,7 +65,7 @@ void test(const SpiF103& spi)
 {
     using Display7Seg = Display7segmentMax7219<Controller::f103>;
 
-    Display7segmentMax7219<Controller::f103> display(&spi);
+    Display7segmentMax7219<Controller::f103> display(spi);
 
     display.clean();
     display.init(15, 8);

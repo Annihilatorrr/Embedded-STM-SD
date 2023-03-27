@@ -22,7 +22,7 @@ template <Controller controllerModel> class Display7segmentMax7219
     uint8_t m_intensity = 1;
     const uint8_t MaxIntensity = 0x0F;
 
-    const Spi<controllerModel>* m_spi;
+    const Spi<controllerModel>& m_spi;
     uint16_t m_spiCsPin;
     uint8_t m_maxDigits;
 
@@ -141,7 +141,7 @@ public:
                 CHAR_I = 0b00110000
     };
 
-    Display7segmentMax7219(const Spi<controllerModel>* spi):m_spi(spi)
+    Display7segmentMax7219(const Spi<controllerModel>& spi):m_spi(spi)
     {}
 
     static uint32_t getPow10n(uint8_t n)
@@ -225,7 +225,7 @@ public:
     }
     void sendData(uint8_t rg, uint8_t dt)
     {
-        m_spi->sendData(rg, dt);
+        m_spi.sendData(rg, dt);
     }
 
     void printDigit(int position, Decoded numeric, bool point)
