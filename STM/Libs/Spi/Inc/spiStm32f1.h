@@ -150,7 +150,7 @@ public:
     }
 
 
-    void sendData(uint8_t address, uint8_t data)
+    void sendData(uint8_t address, uint8_t data) const
     {
         m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
         if (!m_fullDuplex)

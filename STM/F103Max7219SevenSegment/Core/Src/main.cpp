@@ -61,67 +61,48 @@ void SysTick_Handler(void)
 }
 #endif
 
-void animate7SegmentDisplay( Display7segmentMax7219<Controller::f103>& display)
+void test(const SpiF103& spi)
 {
-    for(int intensity = 1;intensity <= 15;++intensity)
-    {
-        display.setIntensity(intensity);
-        delayMs(50);
-    }
-    for(int intensity = 15;intensity > 0;--intensity)
-    {
-        display.setIntensity(intensity);
-        delayMs(50);
-    }
+    using Display7Seg = Display7segmentMax7219<Controller::f103>;
 
-    for(int intensity = 1;intensity <= 15;++intensity)
-    {
-        display.setIntensity(intensity);
-        delayMs(50);
-    }
-    for(int intensity = 15;intensity > 0;--intensity)
-    {
-        display.setIntensity(intensity);
-        delayMs(50);
-    }
-}
-
-void testSpi1()
-{
-    SpiF103 spi(SpiF103::Spi1, SpiF103::SpiFrameSize::Bit8, true, true);
     Display7segmentMax7219<Controller::f103> display(&spi);
 
     display.clean();
-    display.init(1, 8);
-    display.print(88888888);
-    delayMs(1000);
-    animate7SegmentDisplay(display);
     display.init(15, 8);
-    for(int i = 1;i <= 100;++i)
-    {
-        display.clean();
-        display.print(i);
-        delayMs(50);
-    }
-}
+    display.printDigit(4, Display7Seg::Decoded::LETTER_H, false);
+    display.printDigit(3, Display7Seg::Decoded::LETTER_E, false);
+    display.printDigit(2, Display7Seg::Decoded::LETTER_L, false);
+    display.printDigit(1, Display7Seg::Decoded::LETTER_L, false);
+    display.printDigit(0, Display7Seg::Decoded::NUM_0, true);
+    display.animate(&delayMs, 50);
+    display.setIntensity(15);
+    delayMs(500);
+    display.print(1.2222222);
+    delayMs(500);
+    display.print(22.333333);
+    delayMs(500);
+    display.print(333.44444);
+    delayMs(500);
+    display.print(4444.5555);
+    delayMs(500);
+    display.print(55555.666);
+    delayMs(500);
+    display.print(666666.77);
+    delayMs(500);
+    display.print(7777777.8);
+    delayMs(500);
+    display.print(88888888.0);
+    delayMs(500);
 
-void testSpi2()
-{
-    SpiF103 spi(SpiF103::Spi2, SpiF103::SpiFrameSize::Bit8, true, true);
-    Display7segmentMax7219<Controller::f103> display(&spi);
-
+    display.resetDecodeMode();
     display.clean();
-    display.init(1, 8);
-    display.print(88888888);
-    delayMs(1000);
-    animate7SegmentDisplay(display);
-    display.init(15, 8);
-    for(int i = 1;i <= 100;++i)
-    {
-        display.clean();
-        display.print(i);
-        delayMs(50);
-    }
+    display.printChar(7, Display7Seg::NonDecoded::CHAR_g, false);
+    display.printChar(6, Display7Seg::NonDecoded::CHAR_o, false);
+    display.printChar(5, Display7Seg::NonDecoded::CHAR_o, false);
+    display.printChar(4, Display7Seg::NonDecoded::CHAR_d, false);
+    display.printChar(3, Display7Seg::NonDecoded::CHAR_b, false);
+    display.printChar(2, Display7Seg::NonDecoded::CHAR_Y, false);
+    display.printChar(1, Display7Seg::NonDecoded::CHAR_e, false);
 }
 
 int main(void)
@@ -129,8 +110,9 @@ int main(void)
     clockInit();
     SysTick_Init(72000000);
     initSwdOnlyDebugging();
-    testSpi1();
-    testSpi2();
+    //testSpi1();
+    SpiF103 spi(SpiF103::Spi2, SpiF103::SpiFrameSize::Bit8, true, true);
+    test(spi);
 
     while (1)
     {

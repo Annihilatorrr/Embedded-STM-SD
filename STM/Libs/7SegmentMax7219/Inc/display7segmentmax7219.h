@@ -13,35 +13,20 @@
 
 template <Controller controllerModel> class Display7segmentMax7219
 {
-    uint8_t m_decodeMode;
+    enum class DecodeMode: uint8_t
+    {
+        Off = 0x00,
+                On = 0xFF
+    };
+    DecodeMode m_decodeMode;
     uint8_t m_intensity = 1;
     const uint8_t MaxIntensity = 0x0F;
 
-    Spi<controllerModel>* m_spi;
+    const Spi<controllerModel>* m_spi;
     uint16_t m_spiCsPin;
     uint8_t m_maxDigits;
 
-    static constexpr uint8_t SYMBOLS[]
-                                     {
-                                             0x7E,	// numeric 0
-                                             0x30,	// numeric 1
-                                             0x6D,	// numeric 2
-                                             0x79,	// numeric 3
-                                             0x33,	// numeric 4
-                                             0x5B,	// numeric 5
-                                             0x5F,	// numeric 6
-                                             0x70,	// numeric 7
-                                             0x7F,	// numeric 8
-                                             0x7B,	// numeric 9
-                                             0x01,	// minus
-                                             0x4F,	// letter E
-                                             0x37,	// letter H
-                                             0x0E,	// letter L
-                                             0x67,	// letter P
-                                             0x00	// blank
-                                     };
-
-    uint8_t getLengthInDigits(int value)
+    uint8_t getIntPartLengthInDigits(int value)
     {
         uint8_t numberOfDigits{};
         if (value == 0)
@@ -58,14 +43,15 @@ template <Controller controllerModel> class Display7segmentMax7219
 
     void setZeros(uint8_t digits)
     {
-        uint8_t clear = m_decodeMode == 0xFF ? static_cast<uint8_t>(Letters::NUM_0) : 0x00;
+        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::NUM_0) : static_cast<uint8_t>(NonDecoded::NUM_0);
 
-        for (int i = 0; i < digits;++i)
+        for (int i = 1; i <= digits;++i)
         {
             sendData(i, clear);
         }
     }
 
+    using DelayFn = void(*)(uint32_t);
 public:
 
     enum class Registers
@@ -91,7 +77,7 @@ public:
                 DIGIT_5 = 5, DIGIT_6 = 6, DIGIT_7 = 7, DIGIT_8 = 8
     };
 
-    enum class Letters {
+    enum class Decoded {
         NUM_0		= 0x00,
                 NUM_1		= 0x01,
                 NUM_2		= 0x02,
@@ -107,12 +93,55 @@ public:
                 LETTER_H	= 0x0C,
                 LETTER_L	= 0x0D,
                 LETTER_P	= 0x0E,
-                BLANK		= 0x0F
+                BLANK		= 0x0F,
+                HZ  = 0x10
     };
 
+    enum class NonDecoded
+    {
+        NUM_0 = 0x7E, // numeric 0
+                NUM_1 = 0x30, // numeric 1
+                NUM_2 = 0x6D, // numeric 2
+                NUM_3 = 0x79, // numeric 3
+                NUM_4 = 0x33, // numeric 4
+                NUM_5 = 0x5B, // numeric 5
+                NUM_6 = 0x5F, // numeric 6
+                NUM_7 = 0x70, // numeric 7
+                NUM_8 = 0x7F, // numeric 8
+                NUM_9 = 0x7B, // numeric 9
+                CHAR_MINUS = 0x01, // minus
+                CHAR_A = 0b01110111, // A
+                CHAR_B =  0b01111111, // B
+                CHAR_b =  0b00011111, // b
+                CHAR_c = 0b00001101, // c
+                CHAR_C = 0b01001110, // C
+                CHAR_D = 0b01111110, // D
+                CHAR_d = 0b00111101, // d
+                CHAR_E = 0x4F, // letter E
+                CHAR_e = 0b01101111, // e
+                CHAR_F = 0b01000111,
+                CHAR_g = 0b01111011,
+                CHAR_h = 0b00010111,
+                CHAR_H = 0b00110111,
+                CHAR_i = 0b00010000,
+                CHAR_J = 0b01111100,
+                CHAR_j = 0b00011000,
+                CHAR_L = 0b00001110,
+                CHAR_O = 0b01111110,
+                CHAR_o = 0b00011101,
+                CHAR_P = 0b01100111,
+                CHAR_q = 0b01110011,
+                CHAR_r = 0b00000101,
+                CHAR_S = 0b01011011,
+                CHAR_t = 0b00001111,
+                CHAR_U = 0b00111110,
+                CHAR_u = 0b00011100,
+                CHAR_Y = 0b00111011,
+                CHAR_BLANK = 0b00000000,
+                CHAR_I = 0b00110000
+    };
 
-
-    Display7segmentMax7219(Spi<controllerModel>* spi):m_spi(spi)
+    Display7segmentMax7219(const Spi<controllerModel>* spi):m_spi(spi)
     {}
 
     static uint32_t getPow10n(uint8_t n)
@@ -128,7 +157,8 @@ public:
         return retval;
     }
 
-    ~Display7segmentMax7219() {
+    ~Display7segmentMax7219()
+    {
         // TODO Auto-generated destructor stub
     }
 
@@ -155,103 +185,144 @@ public:
 
     void clearDigit(uint8_t digit)
     {
-        uint8_t clear = m_decodeMode == 0xFF ? static_cast<uint8_t>(Letters::BLANK) : 0x00;
-        sendData(digit, clear);
+        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::BLANK) : DecodeMode::Off;
+        sendData(digit + 1, clear);
     }
 
     void clean(void)
     {
-        uint8_t clear = m_decodeMode == 0xFF ? static_cast<uint8_t>(Letters::BLANK) : 0x00;
+        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::BLANK) : static_cast<uint8_t>(DecodeMode::Off);
 
-        for (int i = 0; i < 8; ++i)
+        for (int i = 0; i < m_maxDigits; ++i)
         {
             sendData(i + 1, clear);
         }
     }
 
+    void animate(DelayFn f, uint32_t speed)
+    {
+        for(int intensity = 1;intensity <= 15;++intensity)
+        {
+            setIntensity(intensity);
+            f(speed);
+        }
+        for(int intensity = 15;intensity > 0;--intensity)
+        {
+            setIntensity(intensity);
+            f(speed);
+        }
+
+        for(int intensity = 1;intensity <= 15;++intensity)
+        {
+            setIntensity(intensity);
+            f(speed);
+        }
+        for(int intensity = 15;intensity > 0;--intensity)
+        {
+            setIntensity(intensity);
+            f(speed);
+        }
+    }
     void sendData(uint8_t rg, uint8_t dt)
     {
         m_spi->sendData(rg, dt);
     }
 
-    void printDigit(int position, Letters numeric, bool point)
+    void printDigit(int position, Decoded numeric, bool point)
     {
-        if(position > m_maxDigits)
+        if(position + 1 > m_maxDigits)
         {
             return;
         }
 
         if(point)
         {
-            if(m_decodeMode == 0x00)
+
+            sendData (position + 1, static_cast<int> (numeric) | (1 << 7));
+        }
+        else
+        {
+            sendData (position + 1, static_cast<int> (numeric) & (~(1 << 7)));
+        }
+    }
+
+    void printChar(int position, NonDecoded ch, bool point)
+    {
+        if(position + 1 > m_maxDigits)
+        {
+            return;
+        }
+
+        if(point)
+        {
+            if(m_decodeMode == DecodeMode::Off)
             {
-                sendData(position, SYMBOLS[(int)numeric] | (1 << 7));
-            }
-            else if(m_decodeMode == 0xFF)
-            {
-                sendData(position, (int)numeric | (1 << 7));
+                sendData (position + 1, static_cast<uint8_t>(ch) | (1 << 7));
             }
         }
         else
         {
-            if(m_decodeMode == 0x00)
+            if(m_decodeMode == DecodeMode::Off)
             {
-                sendData(position, SYMBOLS[(int)numeric]  & (~(1 << 7)));
-            }
-            else if(m_decodeMode == 0xFF)
-            {
-                sendData(position,(int)numeric & (~(1 << 7)));
+                sendData (position + 1, static_cast<uint8_t>(ch) & (~(1 << 7)));
             }
         }
     }
 
-    int print(float value, uint8_t digitsAfterPoint)
+    int print(double value)
     {
-        int32_t numberOfDigits{getLengthInDigits(value)+digitsAfterPoint+int(value < 0)};
+        uint8_t digitsAfterPoint = m_maxDigits - getIntPartLengthInDigits(value) - int(value < 0);
+        setZeros(m_maxDigits);
+        return print(value, digitsAfterPoint, m_maxDigits);
+    }
+
+    int print(double value, uint8_t digitsAfterPoint)
+    {
+        int32_t numberOfDigits{getIntPartLengthInDigits(value) + digitsAfterPoint + int(value < 0)};
         setZeros(numberOfDigits);
         return print(value, digitsAfterPoint, numberOfDigits);
     }
 
-    int print(float value, uint8_t digitsAfterPoint, int position)
+    int print(double value, uint8_t digitsAfterPoint, int atPosition)
     {
-        if(digitsAfterPoint > 4)
+        if(digitsAfterPoint > 7)
         {
-            digitsAfterPoint = 4;
+            digitsAfterPoint = 7;
         }
 
         sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), 0xFF);
 
         if (value < 0.0)
         {
-            if(position > 0)
+            if(atPosition > 0)
             {
-                sendData(position, static_cast<uint8_t>(Letters::MINUS));
-                position--;
+                sendData(atPosition, static_cast<uint8_t>(Decoded::MINUS));
+                atPosition--;
             }
 
             value = -value;
         }
 
         int decimal = (value - static_cast<int>(value))*getPow10n(digitsAfterPoint);
-        position -= print(static_cast<int>(value), position, false, decimal !=0 || digitsAfterPoint>0);
+        atPosition -= print(static_cast<int>(value), atPosition, false, decimal !=0 || digitsAfterPoint>0);
 
 
-        auto firstDecimalPosition = position + 1;
-        while(position)
+        auto firstDecimalPosition = atPosition + 1;
+        while(atPosition)
         {
-            auto v = int(value*getPow10n(firstDecimalPosition - position))%10;
-            sendData(position, v);
-            --position;
+            auto v = int(value*getPow10n(firstDecimalPosition - atPosition))%10;
+            sendData(atPosition, v);
+            --atPosition;
         }
 
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), m_decodeMode);
+        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
 
-        return position;
+        return atPosition;
     }
 
     int print(int value)
     {
-        int32_t numberOfDigits{getLengthInDigits(value)+int(value < 0)};
+        int32_t numberOfDigits{getIntPartLengthInDigits(value)+int(value < 0)};
         setZeros(numberOfDigits);
         return print(value, numberOfDigits, false, false);
     }
@@ -260,6 +331,7 @@ public:
     {
         return print(value, position, false, false);
     }
+
     int print(int value, uint8_t position, bool asDecimalPart, bool withPoint)
     {
         sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), 0xFF);
@@ -269,14 +341,14 @@ public:
         {
             if(position > 0)
             {
-                sendData(position, static_cast<uint8_t>(Letters::MINUS));
+                sendData(position, static_cast<uint8_t>(Decoded::MINUS));
                 position--;
             }
             value = -value;
             ++length;
         }
 
-        int32_t numberOfDigits{getLengthInDigits(value)};
+        int32_t numberOfDigits{getIntPartLengthInDigits(value)};
 
         int rightCursor = position - numberOfDigits + 1;
 
@@ -309,17 +381,10 @@ public:
 
         if(withPoint)
         {
-            if(m_decodeMode == 0x00)
-            {
-                sendData(position - numberOfDigits + 1, SYMBOLS[lastIntDigit] | (1 << 7));
-            }
-            else if(m_decodeMode == 0xFF)
-            {
-                sendData(position - numberOfDigits + 1, lastIntDigit | (1 << 7));
-            }
+            sendData(position - numberOfDigits + 1, lastIntDigit | (1 << 7));
         }
         // set back initial decode mode
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), m_decodeMode);
+        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
 
         return length;
     }
@@ -336,14 +401,14 @@ public:
 
     void setDecodeMode(void)
     {
-        m_decodeMode = 0xFF;
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), m_decodeMode);
+        m_decodeMode = DecodeMode::On;
+        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
     }
 
     void resetDecodeMode(void)
     {
-        m_decodeMode = 0x00;
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), m_decodeMode);
+        m_decodeMode = DecodeMode::Off;
+        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
     }
 };
 
