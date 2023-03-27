@@ -64,7 +64,8 @@ void SysTick_Handler(void)
 
 void testSpi1()
 {
-    SpiF103 spi(SpiF103::Spi1, SpiF103::SpiFrameSize::Bit16, true, true);
+    SpiF103 spi(SpiF103::SpiFrameSize::Bit16, true, true);
+    spi.init(SpiF103::Spi1);
 	LedMatrixMax7219<Controller::f103, 8, 4> lm(&spi, 1, 4, 8);
 	delayMs(5000);
 	char str[]{"Test!"};
@@ -74,8 +75,8 @@ void testSpi1()
 
 void testSpi2()
 {
-    SpiF103 spi(SpiF103::Spi2, SpiF103::SpiFrameSize::Bit8, true, true);
-
+    SpiF103 spi(SpiF103::SpiFrameSize::Bit8, true, true);
+    spi.init(SpiF103::Spi2);
 }
 
 int main(void)

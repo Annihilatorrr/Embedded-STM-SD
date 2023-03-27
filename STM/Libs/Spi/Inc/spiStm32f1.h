@@ -181,7 +181,8 @@ public:
         m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
     }
 
-    void readData(uint8_t send, uint8_t *data_mas, uint8_t count){
+    void readData(uint8_t send, uint8_t *data_mas, uint8_t count) const
+    {
         m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
         uint8_t i = 1;
 
@@ -218,7 +219,7 @@ public:
         m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
     }
 
-    void sendData(uint8_t* data, int dataLength)
+    void sendData(uint8_t* data, int dataLength) const
     {
         m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
         if (!m_fullDuplex)
@@ -237,7 +238,7 @@ public:
         m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
     }
 
-    void sendData(uint8_t address, uint8_t* data, int dataLength)
+    void sendData(uint8_t address, uint8_t* data, int dataLength) const
     {
         m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
         if (!m_fullDuplex)
@@ -274,7 +275,7 @@ public:
         m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
     }
 
-    void sendByte(uint8_t data)
+    void sendByte(uint8_t data) const
     {
         m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
         if (!m_fullDuplex)

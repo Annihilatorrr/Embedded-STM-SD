@@ -111,7 +111,8 @@ int main(void)
     SysTick_Init(72000000);
     initSwdOnlyDebugging();
 
-    SpiF103 spi(SpiF103::Spi2, SpiF103::SpiFrameSize::Bit8, true, true);
+    SpiF103 spi(SpiF103::SpiFrameSize::Bit8, true, true);
+    spi.init(SpiF103::Spi2);
     test(spi);
 
     while (1)

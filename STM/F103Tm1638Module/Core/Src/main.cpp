@@ -3,6 +3,7 @@
 
 #include <spi.h>
 #include <delay.h>
+#include <tm1638module.h>
 
 int clockInit(void)
 
@@ -50,7 +51,7 @@ void initSwdOnlyDebugging()
 
 
 bool checkKeys = false;
-SpiF103 spi2(SpiF103::SpiFrameSize::Bit8, false, false);
+Tm1638Module<Controller::f103>* tm1638ModulePtr = nullptr;
 #ifdef __cplusplus
 extern "C"
 #endif
@@ -62,80 +63,119 @@ void SysTick_Handler(void)
 	{
 		--sysTick;
 	}
-	if (checkKeys && msTicks % 250)
+}
+
+
+#ifdef __cplusplus
+extern "C"
+#endif
+void TIM2_IRQHandler (void)
+{
+	if (TIM2->SR & TIM_SR_UIF)
 	{
-		uint8_t keys = 0, key_mas[4];
-		spi2.readData(0x42, key_mas, 4);
-		keys = (key_mas[3]&0x11) << 3 | (key_mas[2]&0x11) << 2 | (key_mas[1]&0x11) << 1 | (key_mas[0]&0x11);
-		for(int start = 0;start < 8; start ++)
+		TIM2->SR &= ~TIM_SR_UIF;
+		GPIOC->ODR^=GPIO_ODR_ODR13;
+		if (checkKeys)
 		{
-			spi2.sendData(0xC1+start*2, keys&0x01);
-			keys >>= 1;
+			auto keys = tm1638ModulePtr->readKeys();
+			if (keys)
+			{
+				TIM2->ARR = 36000-1;
+			}
+			else
+			{
+				TIM2->ARR = 4500-1;
+			}
+			for(int start = 0;start < 8; start ++)
+			{
+				if (keys&0x01)
+				{
+					tm1638ModulePtr->setLed(start);
+					tm1638ModulePtr->incerementDigit(start);
+				}
+				else
+				{
+					tm1638ModulePtr->resetLed(start);
+				}
+				keys >>= 1;
+			}
 		}
 	}
+
 #ifdef __cplusplus
 }
 #endif
 
+void timer2Init(void)
+{
+	// (PSC+1)(ARR+1) = TIMER_CLK/EVENT_CLK
+	// EVENT_CLK = 72000000/(4500*1000)
 
-uint8_t a = 0, dat = 0, mas[8], ind_mas[10];
+	RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+	TIM2->PSC = 1000-1;
 
-uint8_t sym_mas[10] = { // ������ ���� ��� ����������
-		0x3F, // 0
-		0x06, // 1
-		0x5B, // 2
-		0x4F, // 3
-		0x66, // 4
-		0x6D, // 5
-		0x7D, // 6
-		0x07, // 7
-		0x7F, // 8
-		0x6F  // 9
-};
+	// ARR - auto-reload value
+	TIM2->ARR = 4500-1;
 
+	// Re-initializes the timer counter and generates an update of the registers
+	TIM2->EGR |= TIM_EGR_UG;
+
+
+	NVIC_EnableIRQ (TIM2_IRQn);
+}
+
+void timer2Start (void)
+{
+	//Clear TIM2_IRQn update interrupt
+	TIM2->SR &= ~TIM_SR_UIF;
+
+	// Enable interrupt on update
+	TIM2->DIER |= TIM_DIER_UIE;
+
+	// Enable timer
+	TIM2->CR1 |= TIM_CR1_CEN;
+	while (!(TIM2->SR & (1<<0)));
+	NVIC_EnableIRQ(TIM2_IRQn);
+}
 
 int main(void)
 {
 	clockInit();
+	timer2Init();
+	timer2Start();
 	SysTick_Init(72000000);
+	__enable_irq();
 
+	SpiF103 spi2(SpiF103::SpiFrameSize::Bit8, false, false);
 	spi2.init(SpiF103::Spi2);
+	//IoDevices::tm1638ModuleInstance(spi2);
 	// init
 	uint8_t brightness = 7;
-	spi2.sendByte(0x88|(brightness & 0x07));
+	Tm1638Module<Controller::f103> tm1638Module(brightness, spi2);
+	tm1638ModulePtr = &tm1638Module;
+	tm1638Module.clear();
 
-	spi2.sendByte(0x40); // ������������� ������
-	uint8_t zeros[17]{0xC0};
-	spi2.sendData(zeros, 17); // ��������� �����
+	for(int index = 0; index < 8; index++)
+	{
+		tm1638Module.setLed(index);
+		delayMs(50);
+	}
+	delayMs(50);
+	for(int index = 0; index < 8; index++)
+	{
+		tm1638Module.resetLed(index);
+		delayMs(50);
+	}
+	delayMs(50);
 
-	spi2.sendByte(0x44); // ������ �� ��������������� ������
 	for(int start = 0;start < 8; start ++)
 	{
-		spi2.sendData(0xC1+start*2, 1&0x01);
-		delayMs(100);
+		tm1638Module.setDigit(0, start);
+		delayMs(50);
 	}
 	delayMs(100);
-	for(int start = 0;start < 8; start ++)
-	{
-		spi2.sendData(0xC1+start*2, 0&0x01);
-		delayMs(100);
-	}
-	delayMs(100);
-	for(int start = 0;start < 8; start ++)
-	{
-		spi2.sendData(0xC0+start*2, sym_mas[start]);
-		delayMs(100);
-	}
-	delayMs(100);
-	int testCounter = 1;
 
 	checkKeys = true;
-
-	//    TM1638_Init(7);
-	//
-	//    	ALL_Clear();
-	//
-	//    	setupDisplay(true, 7);
 
 	while (1)
 	{
