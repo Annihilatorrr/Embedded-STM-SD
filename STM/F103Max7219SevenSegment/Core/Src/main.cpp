@@ -1,7 +1,7 @@
 #include "main.h"
 #include "stm32f1xx.h"
-#include <display7segmentmax7219.h>
-#include <delay.h>
+#include "7segmentMax7219/Inc/display7segmentmax7219.h"
+#include "Common/Inc/delay.h"
 
 int clockInit(void)
 
@@ -112,7 +112,7 @@ int main(void)
     initSwdOnlyDebugging();
 
     SpiF103 spi(SpiF103::SpiFrameSize::Bit8, true, true);
-    spi.init(SpiF103::Spi2);
+    spi.init(SpiF103::Spi1);
     test(spi);
 
     while (1)
