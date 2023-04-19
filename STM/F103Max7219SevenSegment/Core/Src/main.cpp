@@ -34,6 +34,7 @@ int clockInit(void)
 
     while((RCC->CFGR & RCC_CFGR_SWS_Msk) != RCC_CFGR_SWS_1);
 
+    // disable HSI for power-saving purposes
     RCC->CR &= ~RCC_CR_HSION;
 
     return 0;
@@ -63,57 +64,127 @@ void SysTick_Handler(void)
 
 void test(const SpiF103& spi)
 {
-    using Display7Seg = Display7segmentMax7219<Controller::f103>;
-
     Display7segmentMax7219<Controller::f103> display(spi);
 
     display.clean();
     display.init(15, 8);
-    display.printDigit(4, Display7Seg::Decoded::LETTER_H, false);
-    display.printDigit(3, Display7Seg::Decoded::LETTER_E, false);
-    display.printDigit(2, Display7Seg::Decoded::LETTER_L, false);
-    display.printDigit(1, Display7Seg::Decoded::LETTER_L, false);
-    display.printDigit(0, Display7Seg::Decoded::NUM_0, true);
-    display.animate(&delayMs, 50);
-    display.setIntensity(15);
-    delayMs(500);
-    display.print(1.2222222);
-    delayMs(500);
-    display.print(22.333333);
-    delayMs(500);
-    display.print(333.44444);
-    delayMs(500);
-    display.print(4444.5555);
-    delayMs(500);
-    display.print(55555.666);
-    delayMs(500);
-    display.print(666666.77);
-    delayMs(500);
-    display.print(7777777.8);
-    delayMs(500);
-    display.print(88888888.0);
-    delayMs(500);
-
-    display.resetDecodeMode();
-    display.clean();
-    display.printChar(7, Display7Seg::NonDecoded::CHAR_g, false);
-    display.printChar(6, Display7Seg::NonDecoded::CHAR_o, false);
-    display.printChar(5, Display7Seg::NonDecoded::CHAR_o, false);
-    display.printChar(4, Display7Seg::NonDecoded::CHAR_d, false);
-    display.printChar(3, Display7Seg::NonDecoded::CHAR_b, false);
-    display.printChar(2, Display7Seg::NonDecoded::CHAR_Y, false);
-    display.printChar(1, Display7Seg::NonDecoded::CHAR_e, false);
+    display.print(88888888);
+    //    display.printDigit(4, Display7Seg::Decoded::LETTER_H, false);
+    //    display.printDigit(3, Display7Seg::Decoded::LETTER_E, false);
+    //    display.printDigit(2, Display7Seg::Decoded::LETTER_L, false);
+    //    display.printDigit(1, Display7Seg::Decoded::LETTER_L, false);
+    //    display.printDigit(0, Display7Seg::Decoded::NUM_0, true);
+    //    display.animate(&delayMs, 50);
+    //    display.setIntensity(15);
+    //    delayMs(500);
+    //    display.print(1.2222222);
+    //    delayMs(500);
+    //    display.print(22.333333);
+    //    delayMs(500);
+    //    display.print(333.44444);
+    //    delayMs(500);
+    //    display.print(4444.5555);
+    //    delayMs(500);
+    //    display.print(55555.666);
+    //    delayMs(500);
+    //    display.print(666666.77);
+    //    delayMs(500);
+    //    display.print(7777777.8);
+    //    delayMs(500);
+    //    display.print(88888888.0);
+    //    delayMs(500);
+    //
+    //    display.resetDecodeMode();
+    //    display.clean();
+    //    display.printChar(7, Display7Seg::NonDecoded::CHAR_g, false);
+    //    display.printChar(6, Display7Seg::NonDecoded::CHAR_o, false);
+    //    display.printChar(5, Display7Seg::NonDecoded::CHAR_o, false);
+    //    display.printChar(4, Display7Seg::NonDecoded::CHAR_d, false);
+    //    display.printChar(3, Display7Seg::NonDecoded::CHAR_b, false);
+    //    display.printChar(2, Display7Seg::NonDecoded::CHAR_Y, false);
+    //    display.printChar(1, Display7Seg::NonDecoded::CHAR_e, false);
 }
 
+__IO uint32_t tmpreg;
+uint16_t src_dma_buf[1024] = {0};
+uint16_t dst_dma_buf[1024] = {0};
+uint8_t fl=0;
+
+void  DMA1_Init(void)
+{
+    //DMA controller clock enable
+    RCC->AHBENR  |= RCC_AHBENR_DMA1EN;
+    //Set transfer direction
+    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_DIR, DMA_CCR_MEM2MEM);
+    //Set priority level
+    CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_PL);
+    //Set DMA mode
+    CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_CIRC);
+    //Set peripheral increment mode
+    SET_BIT(DMA1_Channel1->CCR, DMA_CCR_PINC);
+    //Set memory increment mode
+    SET_BIT(DMA1_Channel1->CCR, DMA_CCR_MINC);
+    //Set peripheral data width
+    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_PSIZE_1, DMA_CCR_PSIZE_0);
+    //Set memory data width
+    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_MSIZE_1, DMA_CCR_MSIZE_0);
+    NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+}
+
+extern "C" void DMA1_Channel1_IRQHandler(void)
+{
+  if(READ_BIT(DMA1->ISR, DMA_ISR_TCIF1) == (DMA_ISR_TCIF1))
+  {
+    //Clear Channel 1 global interrupt flag
+    WRITE_REG(DMA1->IFCR, DMA_IFCR_CGIF1);
+    fl = 1;
+  }
+  else if(READ_BIT(DMA1->ISR, DMA_ISR_TEIF1) == (DMA_ISR_TEIF1))
+  {
+    __NOP();
+  }
+}
 int main(void)
 {
     clockInit();
     SysTick_Init(72000000);
     initSwdOnlyDebugging();
+//    DMA1_Init();
+//    for(int i=0; i < 1024; i++)
+//    {
+//        src_dma_buf[i] = 1024 - i;
+//    }
+//
+//    //Disable DMA channel
+//     CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_EN);
+//     //Clear Channel 1  transfer complete flag
+//     WRITE_REG(DMA1->IFCR, DMA_IFCR_CTCIF1);
+//     //Clear Channel 1 transfer error flag
+//     WRITE_REG(DMA1->IFCR, DMA_IFCR_CTEIF1);
+//     //Set Number of data to transfer
+//     MODIFY_REG(DMA1_Channel1->CNDTR, DMA_CNDTR_NDT, 1024);
+//     //Configure the Source and Destination addresses
+//     WRITE_REG(DMA1_Channel1->CPAR, (uint32_t)&src_dma_buf);
+//     WRITE_REG(DMA1_Channel1->CMAR, (uint32_t)&dst_dma_buf);
+//     //Enable Transfer complete interrupt
+//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_TCIE);
+//     //Enable Transfer error interrupt
+//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_TEIE);
+//     //Enable DMA channel
+//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_EN);
 
     SpiF103 spi(SpiF103::SpiFrameSize::Bit8, true, true);
     spi.init(SpiF103::Spi1);
-    test(spi);
+
+    Display7segmentMax7219<Controller::f103> display(spi);
+
+    display.clean();
+    display.init(15, 8);
+    display.print(123123);
+
+    SpiF103 spi2 = spi;
+    spi2.changeCs(PortPinPair{GPIOA, 2});
+    test(spi2);
 
     while (1)
     {

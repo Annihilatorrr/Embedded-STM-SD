@@ -9,6 +9,8 @@
 #define SPISTM32F1_H_
 
 #include "../../Common/Inc/controllerdef.h"
+#include "../../Port/Inc/port.h"
+
 #include "stm32f1xx.h"
 
 template <Controller> class Spi;
@@ -19,13 +21,8 @@ public:
     enum SpiNumber{Spi1, Spi2};
     enum SpiFrameSize{Bit8, Bit16};
 
-    struct PortPinPair
-    {
-        GPIO_TypeDef* port;
-        uint8_t pin;
-    };
-
 private:
+
     PortPinPair m_cs;
     PortPinPair m_clock;
     PortPinPair m_miso;
@@ -35,7 +32,7 @@ private:
     bool m_msbFirst;
     bool m_fullDuplex;
 
-    void spiXInit(uint8_t spiIndex, PortPinPair cs, PortPinPair clock, PortPinPair miso, PortPinPair mosi)
+    void spiXInit(uint8_t spiIndex, const PortPinPair& cs, const PortPinPair& clock, const PortPinPair& miso, const PortPinPair& mosi)
     {
         m_cs = cs;
         m_miso = miso;
@@ -49,32 +46,74 @@ private:
         __IO uint32_t& misoPortConfigRegister = miso.pin > 7 ? miso.port->CRH : miso.port->CRL;
         __IO uint32_t& mosiPortConfigRegister = mosi.pin > 7 ? mosi.port->CRH : mosi.port->CRL;
 
+        // 32bit for pins 0-7  - MODE0[1:0]CNF0[1:0]  .. MODE7[1:0]CNF7[1:0]
+        // 32bit for pins 8-15 - MODE8[1:0]CNF8[1:0]  .. MODE15[1:0]CNF15[1:0]
+
+        // CNFy[1:0]
+        // in output mode (MODE[1:0] > 00)
+        // 00: General purpose output push-pull
+        // 01: General purpose output Open-drain
+        // 10: Alternate function output Push-pull
+        // 11: Alternate function output Open-drain
+
+        // In input mode (MODE[1:0] = 00):
+        // 00: Analog mode
+        // 01: Floating input (reset state)
+        // 10: Input with pull-up / pull-down
+        // 11: Reserved
+
+        // MODEy[1:0]
+        // 00: Input mode (reset state)
+        // 01: Output mode, max speed 10 MHz.
+        // 10: Output mode, max speed 2 MHz.
+        // 11: Output mode, max speed 50 MHz.
+
+        // to calculate MODEy value: pin%8 * 4
+        // to calculate CNFy value: pin%8 * 4 + 2
+
+        // resetting CNFy and MODEy registers:
         // ~(GPIO_CRL_CNFX | GPIO_CRL_MODEX | GPIO_CRL_CNFX_+_1 | GPIO_CRL_MODEX_+_1 | GPIO_CRL_CNFX_+_2 | GPIO_CRL_MODEX_+_2 | GPIO_CRL_CNFX_+_3 | GPIO_CRL_MODEX_+_3);
-        uint32_t csPortConfigTemp = csPortConfigRegister &
-                ~((0b11 << (cs.pin%8*4+2)) |
-                        (0b11 << cs.pin%8*4) |
-                        (0b11 << (clock.pin%8*4+2)) |
-                        (0b11 << clock.pin%8*4) |
-                        (0b11 << (miso.pin%8*4+2)) |
-                        (0b11 << miso.pin%8*4) |
-                        (0b11 << (mosi.pin%8*4+2)) |
-                        (0b11 << mosi.pin%8*4));
-        csPortConfigRegister = csPortConfigTemp;
 
-        mosiPortConfigRegister   |=  (0b11 << mosi.pin%8*4);  	// output, 50 MHz (11)
-        mosiPortConfigRegister   &= ~(0b11 << (mosi.pin%8*4+2)); // Push-Pull (00)
-        mosiPortConfigRegister   |=  (0b10 << (mosi.pin%8*4+2)); // alternative function push-pull (10)
+        uint32_t csPortConfigReset = ~(
+                (0b11 << (m_cs.pin%8 * 4 + 2)) |
+                (0b11 << m_cs.pin%8 * 4)
+        );
 
-        misoPortConfigRegister   &= ~(0b11 << miso.pin%8*4);  // Input (00)
-        misoPortConfigRegister   |=  (0b10 << (miso.pin%8*4+2)); // with pull-up / pull-down
-        miso.port->BSRR   =  (1 << miso.pin);   // Set bit 14 High
+        uint32_t mosiPortConfigReset = ~(
+                (0b11 << (m_mosi.pin%8 * 4 + 2)) |
+                (0b11 << m_mosi.pin%8 * 4)
+        );
 
-        clockPortConfigRegister   |=  (0b11 << clock.pin%8*4);  // output 50 MHz
-        clockPortConfigRegister   |=  (0b10 << (clock.pin%8*4+2)); // alternative function push-pull
+        uint32_t misoPortConfigReset = ~(
+                (0b11 << (m_miso.pin%8 * 4 + 2)) |
+                (0b11 << m_miso.pin%8 * 4)
+        );
 
-        csPortConfigRegister   |=  (0b11 << cs.pin%8*4);  // output 50 MHz
-        csPortConfigRegister   &= ~(0b11 << (cs.pin%8*4+2));	  // Push-Pull General Purpose
-        cs.port->BSRR  =   (1 << cs.pin);   // Set bit High
+        uint32_t clockPortConfigReset = ~(
+                (0b11 << (m_clock.pin%8 * 4 + 2)) |
+                (0b11 << m_clock.pin%8 * 4)
+        );
+
+        csPortConfigRegister &= csPortConfigReset;
+        mosiPortConfigRegister &= mosiPortConfigReset;
+        misoPortConfigRegister &= misoPortConfigReset;
+        clockPortConfigRegister &= clockPortConfigReset;
+
+
+        mosiPortConfigRegister   |=  (0b11 << m_mosi.pin%8*4);  	  // output, 50 MHz (11)
+        mosiPortConfigRegister   |=  (0b10 << (m_mosi.pin%8*4+2)); // alternative function push-pull (10)
+
+        misoPortConfigRegister   &= ~(0b11 << m_miso.pin%8 * 4);       // input (00)
+        misoPortConfigRegister   |=  (0b10 << (m_miso.pin%8 * 4 + 2)); // Input with pull-up / pull-down
+        m_miso.port->BSRR   =  (1 << m_miso.pin);                        // Set bit 14 High
+
+        clockPortConfigRegister   |=  (0b11 << m_clock.pin%8*4);     // output, 50 MHz (11)
+        clockPortConfigRegister   |=  (0b10 << (m_clock.pin%8*4+2)); // Alternate function output Push-pull (10)
+
+        csPortConfigRegister   |=  (0b11 << m_cs.pin%8*4);     // output 50 MHz
+        csPortConfigRegister   &= ~(0b11 << (m_cs.pin%8*4+2));	// Push-Pull General Purpose (11)
+
+        m_cs.port->BSRR  =   (1 << cs.pin);   // Set bit High
 
         m_spi->CR1 = 0x0000; // reset SPI configuration registers
         m_spi->CR2 = 0x0000; // reset SPI configuration registers
@@ -90,18 +129,19 @@ private:
         }
 
         m_spi->CR1   &= ~SPI_CR1_SPE; // disable SPI before configuring
-        m_spi->CR1 = (m_frameSize == SpiFrameSize::Bit8 ? (0 << SPI_CR1_DFF_Pos):SPI_CR1_DFF)    // 8 bit Data frame format
-						                        | (m_msbFirst ? 0 << SPI_CR1_LSBFIRST_Pos:SPI_CR1_LSBFIRST)//  MSB transferred first
-						                        | (m_fullDuplex ? (0 << SPI_CR1_BIDIMODE_Pos):(1 << SPI_CR1_BIDIMODE_Pos))
-						                        | SPI_CR1_SSM               //Software SS
-						                        | SPI_CR1_SSI               // NSS (CS) pin is high
-						                        | SPI_CR1_BR  //Baud
-						                        | SPI_CR1_MSTR // Master mode
-						                        | 0 << SPI_CR1_CPOL_Pos // Clock polarity
-						                        | 0 << SPI_CR1_CPHA_Pos;  // Clock phase
+        m_spi->CR1 = (m_frameSize == SpiFrameSize::Bit8 ? (0 << SPI_CR1_DFF_Pos):SPI_CR1_DFF) // 8/16 bit Data frame format
+						                                                        | (m_msbFirst ? 0 << SPI_CR1_LSBFIRST_Pos:SPI_CR1_LSBFIRST)     // LSB/MSB transferred first
+						                                                        | (m_fullDuplex ? (0 << SPI_CR1_BIDIMODE_Pos):(1 << SPI_CR1_BIDIMODE_Pos)) // half/full duplex
+						                                                        | SPI_CR1_SSM  // Software SS
+						                                                        | SPI_CR1_SSI  // NSS (CS) pin is high
+						                                                        | SPI_CR1_BR   //Baud rate
+						                                                        | SPI_CR1_MSTR // Master mode
+						                                                        | 0 << SPI_CR1_CPOL_Pos  // Clock polarity
+						                                                        | 0 << SPI_CR1_CPHA_Pos; // Clock phase
 
         m_spi->CR1 |= SPI_CR1_SPE; // Enable SPI
     }
+
 
     void initPortAClock()
     {
@@ -140,7 +180,20 @@ public:
     {
 
     }
+    void changeCs(PortPinPair cs)
+    {
+        m_cs = cs;
+        __IO uint32_t& csPortConfigRegister = cs.pin > 7 ? cs.port->CRH : cs.port->CRL;
+        uint32_t csPortConfigReset = ~(
+                (0b11 << (cs.pin%8 * 4 + 2)) |
+                (0b11 << cs.pin%8 * 4)
+        );
+        csPortConfigRegister &= csPortConfigReset;
+        csPortConfigRegister |=  (0b11 << cs.pin%8 * 4);     // output 50 MHz
+        csPortConfigRegister &= ~(0b11 << (cs.pin%8 * 4 + 2)); // Push-Pull General Purpose (11)
 
+        cs.port->BSRR  =   (1 << cs.pin);   // Set bit High
+    }
 
     void init(Spi<Controller::f103>::SpiNumber spiNumber)
     {
@@ -166,13 +219,13 @@ public:
         if (m_frameSize == Spi<Controller::f103>::SpiFrameSize::Bit8)
         {
             m_spi->DR = address;
-            (void) m_spi->DR;
+            static_cast<void> (m_spi->DR);
             while(!(m_spi->SR & SPI_SR_TXE));
             m_spi->DR = data;
         }
         else
         {
-            m_spi->DR = (uint16_t)address << 8 | data;
+            m_spi->DR = static_cast<uint16_t> (address) << 8 | data;
         }
 
         while(!(m_spi->SR & SPI_SR_TXE));
@@ -204,7 +257,6 @@ public:
 
         while(count-- > 1)
         {
-
             m_spi->DR = 0xFF;
 
             while (!(m_spi->SR & SPI_SR_RXNE));
@@ -232,8 +284,7 @@ public:
             while(!(m_spi->SR & SPI_SR_TXE));
             m_spi->DR = data[i];
         }
-        while(m_spi->SR&SPI_SR_BSY) {}
-
+        while(m_spi->SR & SPI_SR_BSY) {}
 
         m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
     }
