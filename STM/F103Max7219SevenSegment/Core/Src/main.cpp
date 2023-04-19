@@ -180,7 +180,7 @@ int main(void)
 
     display.clean();
     display.init(15, 8);
-    display.print(123123);
+    display.print(987);
 
     SpiF103 spi2 = spi;
     spi2.changeCs(PortPinPair{GPIOA, 2});

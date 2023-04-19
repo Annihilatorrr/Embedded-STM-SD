@@ -32,14 +32,22 @@ private:
     bool m_msbFirst;
     bool m_fullDuplex;
 
-    void spiXInit(uint8_t spiIndex, const PortPinPair& cs, const PortPinPair& clock, const PortPinPair& miso, const PortPinPair& mosi)
+    template <uint8_t spiIndex> void spiXInit(const PortPinPair& cs, const PortPinPair& clock, const PortPinPair& miso, const PortPinPair& mosi)
     {
         m_cs = cs;
         m_miso = miso;
         m_mosi = mosi;
         m_clock = clock;
 
-        m_spi = spiIndex == 1 ? SPI1:SPI2;
+        if constexpr (spiIndex == 2)
+        {
+            m_spi = SPI2;
+        }
+
+        if constexpr (spiIndex == 1)
+        {
+            m_spi = SPI1;
+        }
 
         __IO uint32_t& csPortConfigRegister = cs.pin > 7 ? cs.port->CRH : cs.port->CRL;
         __IO uint32_t& clockPortConfigRegister = clock.pin > 7 ? clock.port->CRH : clock.port->CRL;
@@ -118,12 +126,12 @@ private:
         m_spi->CR1 = 0x0000; // reset SPI configuration registers
         m_spi->CR2 = 0x0000; // reset SPI configuration registers
 
-        if (spiIndex == 2)
+        if constexpr (spiIndex == 2)
         {
             RCC->APB1ENR |= RCC_APB1ENR_SPI2EN; // enable spi clock
         }
 
-        if (spiIndex == 1)
+        if constexpr (spiIndex == 1)
         {
             RCC->APB2ENR |= RCC_APB2ENR_SPI1EN; // enable spi clock
         }
@@ -162,14 +170,14 @@ private:
     {
         initAltFunctionsClock();
         initPortAClock();
-        spiXInit(1, PortPinPair{GPIOA, 4}, PortPinPair{GPIOA, 5}, PortPinPair{GPIOA,6}, PortPinPair{GPIOA,7});
+        spiXInit<1>(PortPinPair{GPIOA, 4}, PortPinPair{GPIOA, 5}, PortPinPair{GPIOA,6}, PortPinPair{GPIOA,7});
     }
 
     void initSpi2()
     {
         initAltFunctionsClock();
         initPortBClock();
-        spiXInit(2, PortPinPair{GPIOB, 12}, PortPinPair{GPIOB,13}, PortPinPair{GPIOB,14}, PortPinPair{GPIOB,15});
+        spiXInit<2>(PortPinPair{GPIOB, 12}, PortPinPair{GPIOB,13}, PortPinPair{GPIOB,14}, PortPinPair{GPIOB,15});
     }
 public:
 
