@@ -110,81 +110,88 @@ uint16_t src_dma_buf[1024] = {0};
 uint16_t dst_dma_buf[1024] = {0};
 uint8_t fl=0;
 
-void  DMA1_Init(void)
+class Dma
 {
-    //DMA controller clock enable
-    RCC->AHBENR  |= RCC_AHBENR_DMA1EN;
-    //Set transfer direction
-    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_DIR, DMA_CCR_MEM2MEM);
-    //Set priority level
-    CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_PL);
-    //Set DMA mode
-    CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_CIRC);
-    //Set peripheral increment mode
-    SET_BIT(DMA1_Channel1->CCR, DMA_CCR_PINC);
-    //Set memory increment mode
-    SET_BIT(DMA1_Channel1->CCR, DMA_CCR_MINC);
-    //Set peripheral data width
-    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_PSIZE_1, DMA_CCR_PSIZE_0);
-    //Set memory data width
-    MODIFY_REG(DMA1_Channel1->CCR, DMA_CCR_MSIZE_1, DMA_CCR_MSIZE_0);
-    NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-}
+public:
+    void init()
+    {
+        //DMA controller clock enable
+        RCC->AHBENR  |= RCC_AHBENR_DMA1EN;
+        DMA1_Channel1->CCR &= ~DMA_CCR_EN;
+
+        DMA1_Channel1->CCR |= DMA_CCR_MEM2MEM; //Включаем режим MEM2MEM
+        // DMA1_Channel1->CCR |= DMA_CCR_DIR; // mem->per
+        DMA1_Channel1->CCR &= ~DMA_CCR_DIR; //per->mem
+        DMA1_Channel1->CCR |= DMA_CCR_PINC; //Peripheral increment mode after each transaction
+        DMA1_Channel1->CCR |= DMA_CCR_MINC; //Memory increment mode after each transaction
+        DMA1_Channel1->CCR |= DMA_CCR_PSIZE_0; //Peripheral size: 16bit
+        DMA1_Channel1->CCR |= DMA_CCR_MSIZE_0; //Memory size: 16bit
+        DMA1_Channel1->CCR |= DMA_CCR_PL; //Channel priority level: very high
+        DMA1_Channel1->CCR &= ~DMA_CCR_CIRC; //Circular mode disabled
+
+        //Enable Transfer complete interrupt
+        DMA1_Channel1->CCR |= DMA_CCR_TCIE;
+        //Enable Transfer error interrupt
+        DMA1_Channel1->CCR |= DMA_CCR_TEIE;
+
+        NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+    }
+};
 
 extern "C" void DMA1_Channel1_IRQHandler(void)
 {
-  if(READ_BIT(DMA1->ISR, DMA_ISR_TCIF1) == (DMA_ISR_TCIF1))
-  {
-    //Clear Channel 1 global interrupt flag
-    WRITE_REG(DMA1->IFCR, DMA_IFCR_CGIF1);
-    fl = 1;
-  }
-  else if(READ_BIT(DMA1->ISR, DMA_ISR_TEIF1) == (DMA_ISR_TEIF1))
-  {
-    __NOP();
-  }
+    if(READ_BIT(DMA1->ISR, DMA_ISR_TCIF1) == (DMA_ISR_TCIF1))
+    {
+        DMA1->IFCR |= DMA_IFCR_CGIF1; /* Clear all interrupt flags */
+    }
+    else if(DMA1->ISR & DMA_ISR_TEIF1)
+    {
+        __NOP();
+    }
 }
+
 int main(void)
 {
     clockInit();
     SysTick_Init(72000000);
     initSwdOnlyDebugging();
-//    DMA1_Init();
+//    Dma dma;
+//    dma.init();
 //    for(int i=0; i < 1024; i++)
 //    {
-//        src_dma_buf[i] = 1024 - i;
+//        src_dma_buf[i] = 111;
 //    }
 //
-//    //Disable DMA channel
-//     CLEAR_BIT(DMA1_Channel1->CCR, DMA_CCR_EN);
-//     //Clear Channel 1  transfer complete flag
-//     WRITE_REG(DMA1->IFCR, DMA_IFCR_CTCIF1);
-//     //Clear Channel 1 transfer error flag
-//     WRITE_REG(DMA1->IFCR, DMA_IFCR_CTEIF1);
-//     //Set Number of data to transfer
-//     MODIFY_REG(DMA1_Channel1->CNDTR, DMA_CNDTR_NDT, 1024);
-//     //Configure the Source and Destination addresses
-//     WRITE_REG(DMA1_Channel1->CPAR, (uint32_t)&src_dma_buf);
-//     WRITE_REG(DMA1_Channel1->CMAR, (uint32_t)&dst_dma_buf);
-//     //Enable Transfer complete interrupt
-//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_TCIE);
-//     //Enable Transfer error interrupt
-//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_TEIE);
-//     //Enable DMA channel
-//     SET_BIT(DMA1_Channel1->CCR, DMA_CCR_EN);
+//    for(int i=0; i < 1024; i++)
+//    {
+//        dst_dma_buf[i] = 222;
+//    }
+//
+//    //Clear Channel 1  transfer complete flag
+//    DMA1->IFCR |= DMA_IFCR_CGIF1;
+//    //Clear Channel 1 transfer error flag
+//    DMA1->IFCR |= DMA_IFCR_CTEIF1;
+//    //Set Number of data to transfer
+//    DMA1_Channel1->CNDTR = 1024;
+//    //Configure the Source and Destination addresses
+//    DMA1_Channel1->CPAR =(uint32_t)&src_dma_buf;
+//    DMA1_Channel1->CMAR = (uint32_t)&dst_dma_buf;
+//
+//    //Enable DMA channel
+//    DMA1_Channel1->CCR |= DMA_CCR_EN;
 
-    SpiF103 spi(SpiF103::SpiFrameSize::Bit8, true, true);
-    spi.init(SpiF103::Spi1);
+    SpiF103 spi(SpiF103::SpiFrameSize::Bit16, true, true);
+    spi.init<SpiF103::Spi1>();
 
     Display7segmentMax7219<Controller::f103> display(spi);
 
     display.clean();
-    display.init(15, 8);
-    display.print(987);
-
-    SpiF103 spi2 = spi;
-    spi2.changeCs(PortPinPair{GPIOA, 2});
-    test(spi2);
+    display.init(10, 8);
+    display.print(9);
+    spi.enableDmaAndSend16(2, 0x03); // 8
+    //SpiF103 spi2 = spi;
+    //spi2.changeCs(PortPinPair{GPIOA, 2});
+    //test(spi2);
 
     while (1)
     {

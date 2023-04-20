@@ -13,6 +13,26 @@
 
 #include "stm32f1xx.h"
 
+extern "C" void DMA1_Channel3_IRQHandler(void)
+{
+    if(READ_BIT(DMA1->ISR, DMA_ISR_TCIF3) == (DMA_ISR_TCIF3))
+    {
+        //Clear Channel 3 global interrupt flag
+        DMA1->IFCR |= DMA_IFCR_CGIF3;
+
+        // DMA1 Channel3 is only for transferring data via SPI1, so it's hard-coded
+        while (!(SPI1->SR & SPI_SR_RXNE));while(!(SPI1->SR & SPI_SR_TXE));
+        (void) SPI1->DR;
+        while(SPI1->SR & SPI_SR_BSY) {}
+        GPIOA->BSRR = 1 << 4;
+
+    }
+    else if(READ_BIT(DMA1->ISR, DMA_ISR_TEIF3) == (DMA_ISR_TEIF3))
+    {
+        __NOP();
+    }
+}
+
 template <Controller> class Spi;
 
 template <> class Spi<Controller::f103> {
@@ -32,6 +52,19 @@ private:
     bool m_msbFirst;
     bool m_fullDuplex;
 
+
+    uint16_t src_buf[32]{0};
+
+    void spiEnableTransfer() const
+    {
+        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+    }
+
+    void spiDisableTransfer() const
+    {
+        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+    }
+
     template <uint8_t spiIndex> void spiXInit(const PortPinPair& cs, const PortPinPair& clock, const PortPinPair& miso, const PortPinPair& mosi)
     {
         m_cs = cs;
@@ -40,14 +73,14 @@ private:
         m_clock = clock;
 
         if constexpr (spiIndex == 2)
-        {
+                {
             m_spi = SPI2;
-        }
+                }
 
         if constexpr (spiIndex == 1)
-        {
+                {
             m_spi = SPI1;
-        }
+                }
 
         __IO uint32_t& csPortConfigRegister = cs.pin > 7 ? cs.port->CRH : cs.port->CRL;
         __IO uint32_t& clockPortConfigRegister = clock.pin > 7 ? clock.port->CRH : clock.port->CRL;
@@ -127,25 +160,26 @@ private:
         m_spi->CR2 = 0x0000; // reset SPI configuration registers
 
         if constexpr (spiIndex == 2)
-        {
+                {
             RCC->APB1ENR |= RCC_APB1ENR_SPI2EN; // enable spi clock
-        }
+                }
 
         if constexpr (spiIndex == 1)
-        {
+                {
             RCC->APB2ENR |= RCC_APB2ENR_SPI1EN; // enable spi clock
-        }
+                }
 
         m_spi->CR1   &= ~SPI_CR1_SPE; // disable SPI before configuring
+
         m_spi->CR1 = (m_frameSize == SpiFrameSize::Bit8 ? (0 << SPI_CR1_DFF_Pos):SPI_CR1_DFF) // 8/16 bit Data frame format
-						                                                        | (m_msbFirst ? 0 << SPI_CR1_LSBFIRST_Pos:SPI_CR1_LSBFIRST)     // LSB/MSB transferred first
-						                                                        | (m_fullDuplex ? (0 << SPI_CR1_BIDIMODE_Pos):(1 << SPI_CR1_BIDIMODE_Pos)) // half/full duplex
-						                                                        | SPI_CR1_SSM  // Software SS
-						                                                        | SPI_CR1_SSI  // NSS (CS) pin is high
-						                                                        | SPI_CR1_BR   //Baud rate
-						                                                        | SPI_CR1_MSTR // Master mode
-						                                                        | 0 << SPI_CR1_CPOL_Pos  // Clock polarity
-						                                                        | 0 << SPI_CR1_CPHA_Pos; // Clock phase
+                              | (m_msbFirst ? 0 << SPI_CR1_LSBFIRST_Pos:SPI_CR1_LSBFIRST)     // LSB/MSB transferred first
+                              | (m_fullDuplex ? (0 << SPI_CR1_BIDIMODE_Pos):(1 << SPI_CR1_BIDIMODE_Pos)) // half/full duplex
+                              | SPI_CR1_SSM  // Software SS
+                              | SPI_CR1_SSI  // NSS (CS) pin is high
+                              | SPI_CR1_BR   //Baud rate
+                              | SPI_CR1_MSTR // Master mode
+                              | 0 << SPI_CR1_CPOL_Pos  // Clock polarity
+                              | 0 << SPI_CR1_CPHA_Pos; // Clock phase
 
         m_spi->CR1 |= SPI_CR1_SPE; // Enable SPI
     }
@@ -188,6 +222,60 @@ public:
     {
 
     }
+    void enableDmaAndSend16(uint8_t address, uint8_t data)
+    {
+        class Dma
+        {
+        public:
+            void init()
+            {
+                //DMA controller clock enable
+                RCC->AHBENR  |= RCC_AHBENR_DMA1EN;
+                DMA1_Channel3->CCR &= ~DMA_CCR_EN;
+
+                DMA1->IFCR |= DMA_IFCR_CTCIF3;
+                DMA1->IFCR |= DMA_IFCR_CTEIF3;
+
+                DMA1_Channel3->CCR &= ~DMA_CCR_MEM2MEM; //Выключаем режим MEM2MEM
+                DMA1_Channel3->CCR |= DMA_CCR_DIR; // mem->per
+                //DMA1_Channel1->CCR &= ~DMA_CCR_DIR; //per->mem
+                DMA1_Channel3->CCR &= ~DMA_CCR_PINC; //Peripheral increment mode after each transaction
+                DMA1_Channel3->CCR |= DMA_CCR_MINC; //Memory increment mode after each transaction
+                DMA1_Channel3->CCR |= DMA_CCR_PSIZE_0; //Peripheral size: 16bit
+                DMA1_Channel3->CCR |= DMA_CCR_MSIZE_0; //Memory size: 16bit
+                DMA1_Channel3->CCR |= DMA_CCR_PL; //Channel priority level: very high
+                DMA1_Channel3->CCR &= ~DMA_CCR_CIRC; //Circular mode disabled
+
+                //Enable Transfer complete interrupt
+                DMA1_Channel3->CCR |= DMA_CCR_TCIE;
+                //Enable Transfer error interrupt
+                DMA1_Channel3->CCR |= DMA_CCR_TEIE;
+
+                NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+            }
+        };
+
+        m_spi->CR1   &= ~SPI_CR1_SPE; // disable SPI before configuring
+        m_spi->CR2 |= SPI_CR2_TXDMAEN;
+        m_spi->CR1 |= SPI_CR1_SPE; // Enable SPI
+
+        Dma dma;
+        dma.init();
+        //Clear Channel 1  transfer complete flag
+        DMA1->IFCR |= DMA_IFCR_CGIF3;
+        //Clear Channel 1 transfer error flag
+        DMA1->IFCR |= DMA_IFCR_CTEIF3;
+        //Set Number of data to transfer
+        DMA1_Channel3->CNDTR = 1;
+        //Configure the Source and Destination addresses
+        DMA1_Channel3->CPAR =(uint32_t)&(m_spi->DR);
+        DMA1_Channel3->CMAR = (uint32_t)&src_buf;
+
+        src_buf[0] = static_cast<uint16_t> (address) << 8 | data;
+        //Enable DMA channel
+        spiEnableTransfer();
+        DMA1_Channel3->CCR |= DMA_CCR_EN;
+    }
     void changeCs(PortPinPair cs)
     {
         m_cs = cs;
@@ -203,22 +291,17 @@ public:
         cs.port->BSRR  =   (1 << cs.pin);   // Set bit High
     }
 
-    void init(Spi<Controller::f103>::SpiNumber spiNumber)
+    template <Spi<Controller::f103>::SpiNumber spiNumber> void init()
     {
-        switch(spiNumber)
-        {
-            case Spi1:
-                initSpi1();
-                break;
-            case Spi2:
-                initSpi2();
-                break;
-        }
+        if constexpr (spiNumber == Spi1)
+                    initSpi1();
+        if constexpr (spiNumber == Spi2)
+                    initSpi2();
     }
 
     void sendData(uint8_t address, uint8_t data) const
     {
-        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+        spiEnableTransfer();
         if (!m_fullDuplex)
         {
             m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -239,12 +322,12 @@ public:
         while(!(m_spi->SR & SPI_SR_TXE));
         (void) m_spi->DR;
         while(m_spi->SR & SPI_SR_BSY) {}
-        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+        spiDisableTransfer();
     }
 
     void readData(uint8_t send, uint8_t *data_mas, uint8_t count) const
     {
-        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+        spiEnableTransfer();
         uint8_t i = 1;
 
         if (!m_fullDuplex)
@@ -276,12 +359,12 @@ public:
         {
             m_spi->CR1 |= SPI_CR1_BIDIOE;
         }
-        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+        spiDisableTransfer();
     }
 
     void sendData(uint8_t* data, int dataLength) const
     {
-        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+        spiEnableTransfer();
         if (!m_fullDuplex)
         {
             m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -294,12 +377,12 @@ public:
         }
         while(m_spi->SR & SPI_SR_BSY) {}
 
-        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+        spiDisableTransfer();
     }
 
     void sendData(uint8_t address, uint8_t* data, int dataLength) const
     {
-        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+        spiEnableTransfer();
         if (!m_fullDuplex)
         {
             m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -331,12 +414,12 @@ public:
         while(!(m_spi->SR & SPI_SR_TXE));
         (void) m_spi->DR;
         while(m_spi->SR & SPI_SR_BSY) {}
-        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+        spiDisableTransfer();
     }
 
     void sendByte(uint8_t data) const
     {
-        m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+        spiEnableTransfer();
         if (!m_fullDuplex)
         {
             m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -355,7 +438,7 @@ public:
         while(!(m_spi->SR & SPI_SR_TXE));
         (void) m_spi->DR;
         while(m_spi->SR & SPI_SR_BSY) {}
-        m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+        spiDisableTransfer();
     }
 };
 
