@@ -127,9 +127,19 @@ void Spi::initSpiX(uint8_t spiIndex, PortPinPair cs, PortPinPair clock, PortPinP
 	m_spi->CR1 |= SPI_CR1_SPE; // Enable SPI
 }
 
-void Spi::sendData(uint8_t address, uint8_t data) const
+void Spi::startTransfer() const
 {
 	m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+}
+
+void Spi::endTransfer() const
+{
+	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+}
+
+void Spi::sendData(uint8_t address, uint8_t data) const
+{
+	startTransfer();  // CS RESET
 	if (!m_fullDuplex)
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -150,12 +160,12 @@ void Spi::sendData(uint8_t address, uint8_t data) const
 	while(!(m_spi->SR & SPI_SR_TXE));
 	static_cast<void>(m_spi->DR);
 	while(m_spi->SR & SPI_SR_BSY) {}
-	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+	endTransfer(); // CS SET
 }
 
 void Spi::readData(uint8_t send, uint8_t *data_mas, uint8_t count) const
 {
-	m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+	startTransfer();  // CS RESET
 	uint8_t i = 1;
 
 	if (!m_fullDuplex)
@@ -188,12 +198,12 @@ void Spi::readData(uint8_t send, uint8_t *data_mas, uint8_t count) const
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
 	}
-	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+	endTransfer(); // CS SET
 }
 
 void Spi::sendData(uint8_t* data, int dataLength) const
 {
-	m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+	startTransfer();  // CS RESET
 	if (!m_fullDuplex)
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -206,12 +216,12 @@ void Spi::sendData(uint8_t* data, int dataLength) const
 	}
 	while(m_spi->SR&SPI_SR_BSY) {}
 
-	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+	endTransfer(); // CS SET
 }
 
 void Spi::sendData(uint8_t address, uint8_t* data, int dataLength) const
 {
-	m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+	startTransfer();  // CS RESET
 	if (!m_fullDuplex)
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -243,12 +253,12 @@ void Spi::sendData(uint8_t address, uint8_t* data, int dataLength) const
 	while(!(m_spi->SR & SPI_SR_TXE));
 	static_cast<void>(m_spi->DR);
 	while(m_spi->SR & SPI_SR_BSY) {}
-	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+	endTransfer(); // CS SET
 }
 
 void Spi::sendByte(uint8_t data) const
 {
-	m_cs.port->BSRR = 1 << m_cs.pin << 16U;  // CS RESET
+	startTransfer();  // CS RESET
 	if (!m_fullDuplex)
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
@@ -267,5 +277,5 @@ void Spi::sendByte(uint8_t data) const
 	while(!(m_spi->SR & SPI_SR_TXE));
 	static_cast<void>(m_spi->DR);
 	while(m_spi->SR & SPI_SR_BSY) {}
-	m_cs.port->BSRR = 1 << m_cs.pin; // CS SET
+	endTransfer(); // CS SET
 }

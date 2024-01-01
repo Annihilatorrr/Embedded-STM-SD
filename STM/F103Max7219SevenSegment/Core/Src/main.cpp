@@ -188,7 +188,7 @@ int main(void)
 
     display.clean();
     display.init(10, 8);
-    display.print(77);
+    display.print(78);
     //spi.enableDmaAndSend16(2, 0x03); // 8
     //SpiF103 spi2 = spi;
     //spi2.changeCs(PortPinPair{GPIOA, 2});

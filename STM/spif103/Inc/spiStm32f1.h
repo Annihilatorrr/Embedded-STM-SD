@@ -34,6 +34,8 @@ private:
     void initPortBClock();
     void initAltFunctionsClock();
 
+    void startTransfer() const;
+    void endTransfer() const;
 public:
 
     Spi(SpiFrameSize frameSize, bool msbFirst, bool fullDuplex);
