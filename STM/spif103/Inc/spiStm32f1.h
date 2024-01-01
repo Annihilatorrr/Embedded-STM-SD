@@ -36,6 +36,7 @@ private:
 
     void startTransfer() const;
     void endTransfer() const;
+    void waitTransmittingEnd();
 public:
 
     Spi(SpiFrameSize frameSize, bool msbFirst, bool fullDuplex);

@@ -73,13 +73,13 @@ void Spi::initSpiX(uint8_t spiIndex, PortPinPair cs, PortPinPair clock, PortPinP
 
 	__IO uint32_t& clockPortConfigRegister = clock.pin > 7 ? clock.port->CRH : clock.port->CRL;
 	clockPortConfigRegister = clockPortConfigRegister &
-			~((0b11 << (clock.pin % 8 * 4 + 2)) | // reset Clock CNF pin
-					(0b11 << clock.pin % 8 * 4));         // reset Clock MODE pin
+			~((0b11 << (clock.pin % 8 * 4 + 2)) |   // reset Clock CNF pin
+					(0b11 << clock.pin % 8 * 4));   // reset Clock MODE pin
 
 	__IO uint32_t& misoPortConfigRegister = miso.pin > 7 ? miso.port->CRH : miso.port->CRL;
 	misoPortConfigRegister = misoPortConfigRegister &
-			~((0b11 << (miso.pin % 8 * 4 + 2)) | // reset MISO CNF pin
-					(0b11 << miso.pin % 8 * 4));         // reset MISO MODE pin
+			~((0b11 << (miso.pin % 8 * 4 + 2)) |    // reset MISO CNF pin
+					(0b11 << miso.pin % 8 * 4));    // reset MISO MODE pin
 
 	__IO uint32_t& mosiPortConfigRegister = mosi.pin > 7 ? mosi.port->CRH : mosi.port->CRL;
 	mosiPortConfigRegister = mosiPortConfigRegister &
@@ -151,13 +151,15 @@ void Spi::sendData(uint8_t address, uint8_t data) const
 		static_cast<void>(m_spi->DR);
 		while(!(m_spi->SR & SPI_SR_TXE));
 		m_spi->DR = data;
+		while(!(m_spi->SR & SPI_SR_TXE));
 	}
 	else
 	{
 		m_spi->DR = static_cast<uint16_t>(address) << 8 | data;
+		while(!(m_spi->SR & SPI_SR_TXE));
 	}
 
-	while(!(m_spi->SR & SPI_SR_TXE));
+
 	static_cast<void>(m_spi->DR);
 	while(m_spi->SR & SPI_SR_BSY) {}
 	endTransfer(); // CS SET
@@ -208,11 +210,12 @@ void Spi::sendData(uint8_t* data, int dataLength) const
 	{
 		m_spi->CR1 |= SPI_CR1_BIDIOE;
 	}
+	while(!(m_spi->SR & SPI_SR_TXE));
 
 	for(int i = 0; i< dataLength; ++i)
 	{
-		while(!(m_spi->SR & SPI_SR_TXE));
 		m_spi->DR = data[i];
+		while(!(m_spi->SR & SPI_SR_TXE));
 	}
 	while(m_spi->SR&SPI_SR_BSY) {}
 
@@ -250,9 +253,6 @@ void Spi::sendData(uint8_t address, uint8_t* data, int dataLength) const
 		}
 	}
 
-	while(!(m_spi->SR & SPI_SR_TXE));
-	static_cast<void>(m_spi->DR);
-	while(m_spi->SR & SPI_SR_BSY) {}
 	endTransfer(); // CS SET
 }
 
@@ -266,8 +266,8 @@ void Spi::sendByte(uint8_t data) const
 	while(!(m_spi->SR & SPI_SR_TXE));
 	if (m_frameSize == Spi::SpiFrameSize::Bit8)
 	{
-		while(!(m_spi->SR & SPI_SR_TXE));
 		m_spi->DR = data;
+		while(!(m_spi->SR & SPI_SR_TXE));
 	}
 	else
 	{

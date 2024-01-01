@@ -18,6 +18,7 @@ class Display7segmentMax7219
         Off = 0x00,
         On = 0xFF
     };
+
     DecodeMode m_decodeMode;
     uint8_t m_intensity = 1;
     const uint8_t MaxIntensity = 0x0F;
@@ -26,30 +27,8 @@ class Display7segmentMax7219
     uint16_t m_spiCsPin;
     uint8_t m_maxDigits;
 
-    uint8_t getIntPartLengthInDigits(int value)
-    {
-        uint8_t numberOfDigits{};
-        if (value == 0)
-        {
-            numberOfDigits = 1;
-        }
-        while (value != 0)
-        {
-            value /= 10;
-            ++numberOfDigits;
-        }
-        return numberOfDigits;
-    }
-
-    void setZeros(uint8_t digits)
-    {
-        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::NUM_0) : static_cast<uint8_t>(NonDecoded::NUM_0);
-
-        for (int i = 1; i <= digits;++i)
-        {
-            sendData(i, clear);
-        }
-    }
+    uint8_t getIntPartLengthInDigits(int value);
+    void setZeros(uint8_t digits);
 
     using DelayFn = void(*)(uint32_t);
 public:
@@ -141,272 +120,28 @@ public:
                 CHAR_I = 0b00110000
     };
 
-    Display7segmentMax7219(const Spi& spi):m_spi(spi)
-    {}
+    Display7segmentMax7219(const Spi& spi);
 
-    static uint32_t getPow10n(uint8_t n)
-    {
-        uint32_t retval = 1u;
-
-        while (n > 0u)
-        {
-            retval *= 10u;
-            n--;
-        }
-
-        return retval;
-    }
-
-    ~Display7segmentMax7219()
-    {
-        // TODO Auto-generated destructor stub
-    }
-
-    void init(uint8_t intensity, uint8_t maxDigits){
-        m_maxDigits = maxDigits;
-        sendData(static_cast<uint8_t>(Registers::REG_DISPLAY_TEST), 0);
-        setDecodeMode();
-        sendData(static_cast<uint8_t>(Registers::REG_SCAN_LIMIT), m_maxDigits - 1);
-        setIntensity(intensity);
-        turnOn();
-        clean();
-    }
-
-    void setIntensity(uint8_t intensity)
-    {
-        m_intensity = intensity;
-        if (intensity > MaxIntensity)
-        {
-            return;
-        }
-
-        sendData(static_cast<uint8_t>(Registers::REG_INTENSITY), m_intensity);
-    }
-
-    void clearDigit(uint8_t digit)
-    {
-        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::BLANK) : static_cast<uint8_t>(DecodeMode::Off);
-        sendData(digit + 1, clear);
-    }
-
-    void clean(void)
-    {
-        uint8_t clear = m_decodeMode == DecodeMode::On ? static_cast<uint8_t>(Decoded::BLANK) : static_cast<uint8_t>(DecodeMode::Off);
-
-        for (int i = 0; i < m_maxDigits; ++i)
-        {
-            sendData(i + 1, clear);
-        }
-    }
-
-    void animate(DelayFn f, uint32_t speed)
-    {
-        for(int intensity = 1;intensity <= 15;++intensity)
-        {
-            setIntensity(intensity);
-            f(speed);
-        }
-        for(int intensity = 15;intensity > 0;--intensity)
-        {
-            setIntensity(intensity);
-            f(speed);
-        }
-
-        for(int intensity = 1;intensity <= 15;++intensity)
-        {
-            setIntensity(intensity);
-            f(speed);
-        }
-        for(int intensity = 15;intensity > 0;--intensity)
-        {
-            setIntensity(intensity);
-            f(speed);
-        }
-    }
+    static uint32_t getPow10n(uint8_t n);
+    ~Display7segmentMax7219();
+    void init(uint8_t intensity, uint8_t maxDigits);
+    void setIntensity(uint8_t intensity);
+    void clearDigit(uint8_t digit);
+    void clean(void);
+    void animate(DelayFn f, uint32_t speed);
     void sendData(uint8_t rg, uint8_t dt);
-
-    void printDigit(int position, Decoded numeric, bool point)
-    {
-        if(position + 1 > m_maxDigits)
-        {
-            return;
-        }
-
-        if(point)
-        {
-
-            sendData (position + 1, static_cast<int> (numeric) | (1 << 7));
-        }
-        else
-        {
-            sendData (position + 1, static_cast<int> (numeric) & (~(1 << 7)));
-        }
-    }
-
-    void printChar(int position, NonDecoded ch, bool point)
-    {
-        if(position + 1 > m_maxDigits)
-        {
-            return;
-        }
-
-        if(point)
-        {
-            if(m_decodeMode == DecodeMode::Off)
-            {
-                sendData (position + 1, static_cast<uint8_t>(ch) | (1 << 7));
-            }
-        }
-        else
-        {
-            if(m_decodeMode == DecodeMode::Off)
-            {
-                sendData (position + 1, static_cast<uint8_t>(ch) & (~(1 << 7)));
-            }
-        }
-    }
-
-    int print(double value)
-    {
-        uint8_t digitsAfterPoint = m_maxDigits - getIntPartLengthInDigits(value) - int(value < 0);
-        setZeros(m_maxDigits);
-        return print(value, digitsAfterPoint, m_maxDigits);
-    }
-
-    int print(double value, uint8_t digitsAfterPoint)
-    {
-        int32_t numberOfDigits{getIntPartLengthInDigits(value) + digitsAfterPoint + int(value < 0)};
-        setZeros(numberOfDigits);
-        return print(value, digitsAfterPoint, numberOfDigits);
-    }
-
-    int print(double value, uint8_t digitsAfterPoint, int atPosition)
-    {
-        if(digitsAfterPoint > 7)
-        {
-            digitsAfterPoint = 7;
-        }
-
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), 0xFF);
-
-        if (value < 0.0)
-        {
-            if(atPosition > 0)
-            {
-                sendData(atPosition, static_cast<uint8_t>(Decoded::MINUS));
-                atPosition--;
-            }
-
-            value = -value;
-        }
-
-        int decimal = (value - static_cast<int>(value))*getPow10n(digitsAfterPoint);
-        atPosition -= print(static_cast<int>(value), atPosition, false, decimal !=0 || digitsAfterPoint>0);
-
-
-        auto firstDecimalPosition = atPosition + 1;
-        while(atPosition)
-        {
-            auto v = int(value*getPow10n(firstDecimalPosition - atPosition))%10;
-            sendData(atPosition, v);
-            --atPosition;
-        }
-
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
-
-        return atPosition;
-    }
-
-    int print(int value)
-    {
-        int32_t numberOfDigits{getIntPartLengthInDigits(value)+int(value < 0)};
-        setZeros(numberOfDigits);
-        return print(value, numberOfDigits, false, false);
-    }
-
-    int print(int value, uint8_t position)
-    {
-        return print(value, position, false, false);
-    }
-
-    int print(int value, uint8_t position, bool asDecimalPart, bool withPoint)
-    {
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), 0xFF);
-
-        int length{};
-        if (value < 0)
-        {
-            if(position > 0)
-            {
-                sendData(position, static_cast<uint8_t>(Decoded::MINUS));
-                position--;
-            }
-            value = -value;
-            ++length;
-        }
-
-        int32_t numberOfDigits{getIntPartLengthInDigits(value)};
-
-        int rightCursor = position - numberOfDigits + 1;
-
-        int tempValue = value;
-        int lastIntDigit{tempValue%10};
-        if (tempValue == 0)
-        {
-            if (!asDecimalPart)
-            {
-                sendData(rightCursor, 0);
-                ++length;
-            }
-            else
-            {
-
-            }
-        }
-        while (tempValue != 0)
-        {
-            int digit = tempValue % 10;
-            tempValue /= 10;
-
-            if (rightCursor >= 0)
-            {
-                sendData(rightCursor, digit);
-                ++length;
-            }
-            ++rightCursor;
-        }
-
-        if(withPoint)
-        {
-            sendData(position - numberOfDigits + 1, lastIntDigit | (1 << 7));
-        }
-        // set back initial decode mode
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
-
-        return length;
-    }
-
-    void turnOn(void)
-    {
-        sendData(static_cast<uint8_t>(Registers::REG_SHUTDOWN), 0x01);
-    }
-
-    void turnOff(void)
-    {
-        sendData(static_cast<uint8_t>(Registers::REG_SHUTDOWN), 0x00);
-    }
-
-    void setDecodeMode(void)
-    {
-        m_decodeMode = DecodeMode::On;
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
-    }
-
-    void resetDecodeMode(void)
-    {
-        m_decodeMode = DecodeMode::Off;
-        sendData(static_cast<uint8_t>(Registers::REG_DECODE_MODE), static_cast<uint8_t>(m_decodeMode));
-    }
+    void printDigit(int position, Decoded numeric, bool point);
+    void printChar(int position, NonDecoded ch, bool point);
+    //int print(double value);
+    int print(double value, uint8_t digitsAfterPoint = 2);
+    int print(double value, uint8_t digitsAfterPoint, int atPosition);
+    int print(int value);
+    int print(int value, uint8_t position);
+    int print(int value, uint8_t position, bool asDecimalPart, bool withPoint);
+    void turnOn(void);
+    void turnOff(void);
+    void setDecodeMode(void);
+    void resetDecodeMode(void);
 };
 
 #endif /* DISPLAY7SEGMENTMAX7219_H */

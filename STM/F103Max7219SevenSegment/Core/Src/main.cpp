@@ -49,19 +49,7 @@ void initSwdOnlyDebugging()
     AFIO->MAPR |= AFIO_MAPR_SWJ_CFG_JTAGDISABLE; // JTAG is disabled, SWD is enabled
 }
 
-#ifdef __cplusplus
-extern "C"
-#endif
-void SysTick_Handler(void)
-{
-    //++msTicks;
-    if (sysTick > 0)
-    {
-        --sysTick;
-    }
-#ifdef __cplusplus
-}
-#endif
+
 
 void test(const Spi& spi)
 {
@@ -70,6 +58,7 @@ void test(const Spi& spi)
     display.clean();
     display.init(15, 8);
     display.print(88888888);
+    delayMs(1000);
     //    display.printDigit(4, Display7Seg::Decoded::LETTER_H, false);
     //    display.printDigit(3, Display7Seg::Decoded::LETTER_E, false);
     //    display.printDigit(2, Display7Seg::Decoded::LETTER_L, false);
@@ -106,91 +95,49 @@ void test(const Spi& spi)
     //    display.printChar(1, Display7Seg::NonDecoded::CHAR_e, false);
 }
 
-__IO uint32_t tmpreg;
-uint16_t src_dma_buf[1024] = {0};
-uint16_t dst_dma_buf[1024] = {0};
-uint8_t fl=0;
-
-class Dma
-{
-public:
-    void init()
-    {
-        //DMA controller clock enable
-        RCC->AHBENR  |= RCC_AHBENR_DMA1EN;
-        DMA1_Channel1->CCR &= ~DMA_CCR_EN;
-
-        DMA1_Channel1->CCR |= DMA_CCR_MEM2MEM; //Включаем режим MEM2MEM
-        // DMA1_Channel1->CCR |= DMA_CCR_DIR; // mem->per
-        DMA1_Channel1->CCR &= ~DMA_CCR_DIR; //per->mem
-        DMA1_Channel1->CCR |= DMA_CCR_PINC; //Peripheral increment mode after each transaction
-        DMA1_Channel1->CCR |= DMA_CCR_MINC; //Memory increment mode after each transaction
-        DMA1_Channel1->CCR |= DMA_CCR_PSIZE_0; //Peripheral size: 16bit
-        DMA1_Channel1->CCR |= DMA_CCR_MSIZE_0; //Memory size: 16bit
-        DMA1_Channel1->CCR |= DMA_CCR_PL; //Channel priority level: very high
-        DMA1_Channel1->CCR &= ~DMA_CCR_CIRC; //Circular mode disabled
-
-        //Enable Transfer complete interrupt
-        DMA1_Channel1->CCR |= DMA_CCR_TCIE;
-        //Enable Transfer error interrupt
-        DMA1_Channel1->CCR |= DMA_CCR_TEIE;
-
-        NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-    }
-};
-
-extern "C" void DMA1_Channel1_IRQHandler(void)
-{
-    if(READ_BIT(DMA1->ISR, DMA_ISR_TCIF1) == (DMA_ISR_TCIF1))
-    {
-        DMA1->IFCR |= DMA_IFCR_CGIF1; /* Clear all interrupt flags */
-    }
-    else if(DMA1->ISR & DMA_ISR_TEIF1)
-    {
-        __NOP();
-    }
-}
-
 int main(void)
 {
-    //clockInit();
-    //SysTick_Init(72000000);
+    int pauseMs = 100;
+    clockInit();
+    SysTick_Init(72000000);
     initSwdOnlyDebugging();
-//    Dma dma;
-//    dma.init();
-//    for(int i=0; i < 1024; i++)
-//    {
-//        src_dma_buf[i] = 111;
-//    }
-//
-//    for(int i=0; i < 1024; i++)
-//    {
-//        dst_dma_buf[i] = 222;
-//    }
-//
-//    //Clear Channel 1  transfer complete flag
-//    DMA1->IFCR |= DMA_IFCR_CGIF1;
-//    //Clear Channel 1 transfer error flag
-//    DMA1->IFCR |= DMA_IFCR_CTEIF1;
-//    //Set Number of data to transfer
-//    DMA1_Channel1->CNDTR = 1024;
-//    //Configure the Source and Destination addresses
-//    DMA1_Channel1->CPAR =(uint32_t)&src_dma_buf;
-//    DMA1_Channel1->CMAR = (uint32_t)&dst_dma_buf;
-//
-//    //Enable DMA channel
-//    DMA1_Channel1->CCR |= DMA_CCR_EN;
-
     Spi spi(Spi::SpiFrameSize::Bit16, true, true);
     spi.init(Spi::Spi1);
 
     Display7segmentMax7219 display(spi);
-
-    display.clean();
     display.init(10, 8);
-    display.print(78);
+
+    int ar[]{1, 12, 123, 1234, 12345, 123456, 1234567, 12345678};
+    for(auto item:ar)
+    {
+        display.print(item);
+        delayMs(pauseMs);
+    }
+    display.clean();
+    delayMs(pauseMs);
+    for(int i = 0; i < 7; ++i)
+    {
+        display.print(-ar[i]);
+        delayMs(pauseMs);
+    }
+    display.clean();
+    delayMs(pauseMs);
+    for(int i = 1; i <= 7; ++i)
+    {
+        display.print(1.0, i);
+        delayMs(pauseMs);
+    }
+    display.clean();
+    delayMs(pauseMs);
+
+    display.printDigit(4, Display7segmentMax7219::Decoded::LETTER_H, false);
+    display.printDigit(3, Display7segmentMax7219::Decoded::LETTER_E, false);
+    display.printDigit(2, Display7segmentMax7219::Decoded::LETTER_L, false);
+    display.printDigit(1, Display7segmentMax7219::Decoded::LETTER_L, false);
+    display.printDigit(0, Display7segmentMax7219::Decoded::NUM_0, true);
+    display.animate([](uint32_t s){delayMs(s);}, 50);
     //spi.enableDmaAndSend16(2, 0x03); // 8
-    //SpiF103 spi2 = spi;
+    Spi spi2 = spi;
     //spi2.changeCs(PortPinPair{GPIOA, 2});
     //test(spi2);
 
