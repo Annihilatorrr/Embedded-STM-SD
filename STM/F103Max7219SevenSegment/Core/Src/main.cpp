@@ -1,7 +1,8 @@
 #include "main.h"
 #include "stm32f1xx.h"
-#include "7segmentMax7219/Inc/display7segmentmax7219.h"
-#include "Common/Inc/delay.h"
+#include "display7segmentmax7219.h"
+#include "delay.h"
+#include <spiStm32f1.h>
 
 int clockInit(void)
 
@@ -62,9 +63,9 @@ void SysTick_Handler(void)
 }
 #endif
 
-void test(const SpiF103& spi)
+void test(const Spi& spi)
 {
-    Display7segmentMax7219<Controller::f103> display(spi);
+    Display7segmentMax7219 display(spi);
 
     display.clean();
     display.init(15, 8);
@@ -152,8 +153,8 @@ extern "C" void DMA1_Channel1_IRQHandler(void)
 
 int main(void)
 {
-    clockInit();
-    SysTick_Init(72000000);
+    //clockInit();
+    //SysTick_Init(72000000);
     initSwdOnlyDebugging();
 //    Dma dma;
 //    dma.init();
@@ -180,15 +181,15 @@ int main(void)
 //    //Enable DMA channel
 //    DMA1_Channel1->CCR |= DMA_CCR_EN;
 
-    SpiF103 spi(SpiF103::SpiFrameSize::Bit16, true, true);
-    spi.init<SpiF103::Spi1>();
+    Spi spi(Spi::SpiFrameSize::Bit16, true, true);
+    spi.init(Spi::Spi1);
 
-    Display7segmentMax7219<Controller::f103> display(spi);
+    Display7segmentMax7219 display(spi);
 
     display.clean();
     display.init(10, 8);
-    display.print(9);
-    spi.enableDmaAndSend16(2, 0x03); // 8
+    display.print(77);
+    //spi.enableDmaAndSend16(2, 0x03); // 8
     //SpiF103 spi2 = spi;
     //spi2.changeCs(PortPinPair{GPIOA, 2});
     //test(spi2);
@@ -196,5 +197,7 @@ int main(void)
     while (1)
     {
     }
+
+    return 0;
 }
 
